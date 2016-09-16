@@ -11,8 +11,8 @@ object BuildSettings {
 
   val buildName = "scala-kit"
   val buildOrganization = "io.prismic"
-  val buildVersion = Option(System.getProperty("version")).map(_.trim).getOrElse("1.0-SNAPSHOT")
-  val buildScalaVersion = "2.11.1"
+  val buildVersion = "1.3.7-SENTIONE-1"
+  val buildScalaVersion = "2.10.4"
 
   val buildSettings = xerial.sbt.Sonatype.sonatypeSettings ++
       site.settings ++
@@ -24,7 +24,22 @@ object BuildSettings {
     scalaVersion := buildScalaVersion,
     crossScalaVersions := Seq("2.10.4", "2.11.1"),
     scalacOptions := Seq("-deprecation", "-unchecked", "-feature"),
-    gitRemoteRepo := "git@github.com:prismicio/scala-kit.git",
+    publishTo <<= version apply { (v: String) =>
+        val nexus = "http://nexus-office.sentione.com:8086/nexus/"
+        if (v.trim.endsWith("SNAPSHOT"))
+            Some("snapshots" at nexus + "content/repositories/chimeo-snapshots")
+        else
+            Some("releases" at nexus + "content/repositories/chimeo-releases")
+    },
+    externalResolvers := Seq(
+        "Nexus Proxy Repository" at "http://nexus-office.sentione.com:8086/nexus/content/groups/public"
+    ),
+    credentials += Credentials(Path.userHome / ".nexusCredentials"),
+    publishTo <<= version apply { (v: String) =>
+        Some("releases" at "http://nexus-office.sentione.com:8086/nexus/content/repositories/chimeo_dep")
+    },
+    publishMavenStyle := true,
+    gitRemoteRepo := "https://github.com/SentiOne/prismic-scala-kit.git",
     pomExtra := {
       <url>https://github.com/prismicio/scala-kit</url>
         <licenses>
