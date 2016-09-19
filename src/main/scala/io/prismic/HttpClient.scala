@@ -136,7 +136,13 @@ object HttpClient {
                                                     request.headers().set(key, value)
                                                 }
 
-        ch.writeAndFlush(request)
+        ch.writeAndFlush(request).addListener(new ChannelFutureListener {
+          def operationComplete(future: ChannelFuture): Unit = {
+            if (future.cause() != null) {
+              result.failure(future.cause())
+            }
+          }
+        })
       }
     })
 
