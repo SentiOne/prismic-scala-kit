@@ -11,7 +11,7 @@ object BuildSettings {
 
   val buildName = "scala-kit"
   val buildOrganization = "io.prismic"
-  val buildVersion = "1.3.7-SENTIONE-1"
+  val buildVersion = "1.3.7-SENTIONE-2"
   val buildScalaVersion = "2.10.4"
 
   val buildSettings = xerial.sbt.Sonatype.sonatypeSettings ++
