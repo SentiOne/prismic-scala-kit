@@ -12,7 +12,7 @@ object BuildSettings {
   val buildName = "scala-kit"
   val buildOrganization = "io.prismic"
   val buildVersion = "1.3.7-SENTIONE-2"
-  val buildScalaVersion = "2.10.4"
+  val buildScalaVersion = "2.12.2"
 
   val buildSettings = xerial.sbt.Sonatype.sonatypeSettings ++
       site.settings ++
@@ -22,7 +22,7 @@ object BuildSettings {
     organization := buildOrganization,
     version := buildVersion,
     scalaVersion := buildScalaVersion,
-    crossScalaVersions := Seq("2.10.4", "2.11.1"),
+    crossScalaVersions := Seq("2.10.4", "2.11.1", "2.12.2"),
     scalacOptions := Seq("-deprecation", "-unchecked", "-feature"),
     publishTo <<= version apply { (v: String) =>
         val nexus = "http://nexus-office.sentione.com:8086/nexus/"
@@ -69,7 +69,7 @@ object KitBuild extends Build {
 
   lazy val ScalaKit = Project(
     BuildSettings.buildName, file("."),
-    settings = BuildSettings.buildSettings ++ net.virtualvoid.sbt.graph.Plugin.graphSettings ++ Seq(
+    settings = BuildSettings.buildSettings ++ Seq(
       scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
       scalacOptions in (Compile, doc) ++= Seq("-doc-root-content", baseDirectory.value + "/root-doc.txt"),
 
@@ -94,7 +94,7 @@ object KitBuild extends Build {
         "com.jcraft" % "jzlib" %  "1.1.2",
         "io.netty" % "netty-all" % "4.0.31.Final",
         "org.apache.commons" % "commons-collections4" % "4.0",
-        "org.specs2" %% "specs2" % "2.3.13" % "test"
+        "org.specs2" %% "specs2-core" % "3.9.4" % "test" // See https://github.com/etorreborre/specs2/issues/579
       )
     )
   )

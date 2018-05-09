@@ -53,24 +53,13 @@ class FragmentSpec extends Specification {
     }
   }
   "Link" should {
-    val api = await(Api.get("https://test-public.prismic.io/api"))
-    def query(q: String) = await(api.forms("everything").ref(api.master).query(q).submit())
-    val doc = query("""[[:d = at(document.id, "Uyr9_wEAAKYARDMV")]]""").results.head
-    "support media" in {
-      doc getLink "test-link.related" must beSome.like {
-        case l: FileLink => l.filename must_== "baastad.pdf"
-      }
-    }
-  }
-  "Link" should {
-    val api = await(Api.get("https://test-public.prismic.io/api"))
-    def query(q: String) = await(api.forms("everything").ref(api.master).query(q).submit())
-    val doc = query("""[[:d = at(document.id, "VFfjTSgAACYA86Zn")]]""").results.head
-    println(doc.getLink("product.gallery"))
-    "support image media" in {
-      doc getLink "product.link" must beSome.like {
-        case l: ImageLink => l.filename must_== "20130209_152532.jpg"
-      }
+    lazy val document = Fixtures.document
+    document.getLink("store.link") must beSome.like {
+      case d: DocumentLink =>
+        d.fragments.get("timestamp.text") must beSome.like {
+          case s: StructuredText =>
+            s.asHtml(resolver) must_== "<p>This is text</p>"
+        }
     }
   }
   "Timestamp" should {
@@ -86,26 +75,7 @@ class FragmentSpec extends Specification {
         }
     }
   }
-/*  "Multiple document link" should {
-    val api = await(Api.get("https://lesbonneschoses.cdn.prismic.io/api"))
-    def query(q: String) = await(api.forms("everything").ref(api.master).query(q).submit())
-    val doc = query("""[[:d = at(document.id, "UlfoxUnM0wkXYXbs")]]""").results.head
-    "find first link" in {
-      doc getLink "job-offer.location" must beSome.like {
-        case l: Fragment.DocumentLink => l.slug must_== "new-york-fifth-avenue"
-      }
-    }
-    "find all links" in {
-      val links = doc getAll "job-offer.location"
-      links must haveSize(5)
-      links lift 0 must beSome.like {
-        case l: Fragment.DocumentLink => l.slug must_== "new-york-fifth-avenue"
-      }
-      links lift 1 must beSome.like {
-        case l: Fragment.DocumentLink => l.slug must_== "tokyo-roppongi-hills"
-      }
-    }
-  }*/
+
   "Slices" should {
       val json = JsonParser(
         """
@@ -116,7 +86,8 @@ class FragmentSpec extends Specification {
           |      "href":"http://toto.wroom.dev/api/documents/search?ref=VQ_uWX1Za0oCy46m&q=%5B%5B%3Ad+%3D+at%28document.id%2C+%22VQ_hV31Za5EAy02H%22%29+%5D%5D",
           |      "tags":[],
           |      "slugs":["une-activite"],
-          |       "linked_documents":[],
+          |      "linked_documents":[],
+          |      "lang": "fr-fr",
           |       "data":{
           |           "article":{
           |               "blocks":{
@@ -183,6 +154,7 @@ class FragmentSpec extends Specification {
         |   "tags":[],
         |   "slugs":["website-starter-sample-page","sample-website-starter-page","a-sample-website-starter-page"],
         |   "linked_documents":[],
+        |   "lang": "fr-fr",
         |   "data":{
         |     "page":{
         |       "body":{
@@ -230,51 +202,7 @@ class FragmentSpec extends Specification {
         }
       }
   }
-  /*
-  "StructuredText" should {
-    val api = await(Api.get("https://lesbonneschoses.cdn.prismic.io/api"))
-    def query(q: String) = await(api.forms("everything").ref(api.master).query(q).submit())
-    val doc = query("""[[:d = at(document.id, "UlfoxUnM0wkXYXbt")]]""").results.head
-    val struct = doc getStructuredText "blog-post.body"
-    "serialize to html" in {
-      struct must beSome.like { case body: StructuredText =>
-        body.asHtml(resolver) mustEqual
-        """<h1>The end of a chapter the beginning of a new one</h1>
-          |
-          |<p class="block-img"><img alt="" src="https://d2aw36oac6sa9o.cloudfront.net/lesbonneschoses/8181933ff2f5032daff7d732e33a3beb6f57e09f.jpg" width="640" height="960" /></p>
-          |
-          |<p>Jean-Michel Pastranova, the founder of <em>Les Bonnes Choses</em>, and creator of the whole concept of modern fine pastry, has decided to step down as the CEO and the Director of Workshops of <em>Les Bonnes Choses</em>, to focus on other projects, among which his now best-selling pastry cook books, but also to take on a primary role in a culinary television show to be announced later this year.</p>
-          |
-          |<p>"I believe I've taken the <em>Les Bonnes Choses</em> concept as far as it can go. <em>Les Bonnes Choses</em> is already an entity that is driven by its people, thanks to a strong internal culture, so I don't feel like they need me as much as they used to. I'm sure they are greater ways to come, to innovate in pastry, and I'm sure <em>Les Bonnes Choses</em>'s coming innovation will be even more mind-blowing than if I had stayed longer."</p>
-          |
-          |<p>He will remain as a senior advisor to the board, and to the workshop artists, as his daughter Selena, who has been working with him for several years, will fulfill the CEO role from now on.</p>
-          |
-          |<p>"My father was able not only to create a revolutionary concept, but also a company culture that puts everyone in charge of driving the company's innovation and quality. That gives us years, maybe decades of revolutionary ideas to come, and there's still a long, wonderful path to walk in the fine pastry world."</p>"""
-          .stripMargin
-      }
-    }
-    "serialize with a custom serializer" in {
-       struct must beSome.like { case body: StructuredText =>
-       body.asHtml(resolver, HtmlSerializer {
-          case (StructuredText.Block.Image(view, _, _, _), _) => s"${view.asHtml}"
-          case (em: Span.Em, content) => s"<em class='italic'>$content</em>"
-        }) mustEqual
-        """<h1>The end of a chapter the beginning of a new one</h1>
-          |
-          |<img alt="" src="https://d2aw36oac6sa9o.cloudfront.net/lesbonneschoses/8181933ff2f5032daff7d732e33a3beb6f57e09f.jpg" width="640" height="960" />
-          |
-          |<p>Jean-Michel Pastranova, the founder of <em class='italic'>Les Bonnes Choses</em>, and creator of the whole concept of modern fine pastry, has decided to step down as the CEO and the Director of Workshops of <em class='italic'>Les Bonnes Choses</em>, to focus on other projects, among which his now best-selling pastry cook books, but also to take on a primary role in a culinary television show to be announced later this year.</p>
-          |
-          |<p>"I believe I've taken the <em class='italic'>Les Bonnes Choses</em> concept as far as it can go. <em class='italic'>Les Bonnes Choses</em> is already an entity that is driven by its people, thanks to a strong internal culture, so I don't feel like they need me as much as they used to. I'm sure they are greater ways to come, to innovate in pastry, and I'm sure <em class='italic'>Les Bonnes Choses</em>'s coming innovation will be even more mind-blowing than if I had stayed longer."</p>
-          |
-          |<p>He will remain as a senior advisor to the board, and to the workshop artists, as his daughter Selena, who has been working with him for several years, will fulfill the CEO role from now on.</p>
-          |
-          |<p>"My father was able not only to create a revolutionary concept, but also a company culture that puts everyone in charge of driving the company's innovation and quality. That gives us years, maybe decades of revolutionary ideas to come, and there's still a long, wonderful path to walk in the fine pastry world."</p>"""
-          .stripMargin
-      }
-    }
-  }
-   */
+
   "Nested spans" should {
     val text = "abcdefghijklmnopqrstuvwxyz"
     "correctly serialize with the same starting point" in {
@@ -312,7 +240,7 @@ class FragmentSpec extends Specification {
 
   "Block spans" should {
     "serialize labels within <li> tags" in {
-      val json = JsonParser( """{"page":1,"results_per_page":20,"results_size":1,"total_results_size":1,"total_pages":1,"next_page":null,"prev_page":null,"results":[{"id":"VBgfNTYAANcgz2bT","type":"doc","href":"https://wroom.prismic.io/api/documents/search?ref=VDaF_jIAADMA7e5N&q=%5B%5B%3Ad+%3D+at%28document.id%2C+%22VBgfNTYAANcgz2bT%22%29+%5D%5D","tags":["doc-developers"],"slugs":["querying-a-repository"],"linked_documents":[{"id":"UkTD57O53-4AY1EF","tags":["api"],"type":"doc","slug":"api-documentation"},{"id":"UmlghEnM00YhgHUB","tags":["api"],"type":"doc","slug":"orderings"}],"data":{"doc":{"title":{"type":"StructuredText","value":[{"type":"heading1","text":"Querying a Repository","spans":[]}]},"content":{"type":"StructuredText","value":[{"type":"paragraph","direction":"rtl","text":"To query your API, you will need to specify a form and a reference in addition to your query.","spans":[{"start":46,"end":50,"type":"strong"},{"start":57,"end":67,"type":"strong"},{"start":78,"end":92,"type":"strong"}]},{"type":"list-item","text":"The operator: this is the function you call to build the predicate, for example Predicate.at.","spans":[{"start":4,"end":12,"type":"em"},{"start":80,"end":93,"type":"label","data":{"label":"codespan"}}]},{"type":"list-item","text":"The fragment: the first argument you pass, for example \"document.id\".","spans":[{"start":4,"end":12,"type":"em"},{"start":55,"end":68,"type":"label","data":{"label":"codespan"}}]},{"type":"list-item","text":"The values: the other arguments you pass, usually one but it can be more for some predicates. For example \"product\".","spans":[{"start":4,"end":10,"type":"em"},{"start":106,"end":115,"type":"label","data":{"label":"codespan"}}]}]}}}}],"version":"e5752a1","license":"All Rights Reserved"}""")
+      val json = JsonParser( """{"page":1,"results_per_page":20,"results_size":1,"total_results_size":1,"total_pages":1,"next_page":null,"prev_page":null,"results":[{"id":"VBgfNTYAANcgz2bT","type":"doc","href":"https://wroom.prismic.io/api/documents/search?ref=VDaF_jIAADMA7e5N&q=%5B%5B%3Ad+%3D+at%28document.id%2C+%22VBgfNTYAANcgz2bT%22%29+%5D%5D","tags":["doc-developers"],"slugs":["querying-a-repository"],"linked_documents":[{"id":"UkTD57O53-4AY1EF","tags":["api"],"type":"doc","slug":"api-documentation","lang":"en-en"},{"id":"UmlghEnM00YhgHUB","tags":["api"],"type":"doc","slug":"orderings","lang":"en-en"}],"lang": "fr-fr", "data":{"doc":{"title":{"type":"StructuredText","value":[{"type":"heading1","text":"Querying a Repository","spans":[]}]},"content":{"type":"StructuredText","value":[{"type":"paragraph","direction":"rtl","text":"To query your API, you will need to specify a form and a reference in addition to your query.","spans":[{"start":46,"end":50,"type":"strong"},{"start":57,"end":67,"type":"strong"},{"start":78,"end":92,"type":"strong"}]},{"type":"list-item","text":"The operator: this is the function you call to build the predicate, for example Predicate.at.","spans":[{"start":4,"end":12,"type":"em"},{"start":80,"end":93,"type":"label","data":{"label":"codespan"}}]},{"type":"list-item","text":"The fragment: the first argument you pass, for example \"document.id\".","spans":[{"start":4,"end":12,"type":"em"},{"start":55,"end":68,"type":"label","data":{"label":"codespan"}}]},{"type":"list-item","text":"The values: the other arguments you pass, usually one but it can be more for some predicates. For example \"product\".","spans":[{"start":4,"end":10,"type":"em"},{"start":106,"end":115,"type":"label","data":{"label":"codespan"}}]}]}}}}],"version":"e5752a1","license":"All Rights Reserved"}""")
       val response = json.convertTo[Response]
       val text = response.results.head.getStructuredText("doc.content")
       text.map(_.asHtml(resolver)) must beSome.like {
@@ -351,7 +279,8 @@ class FragmentSpec extends Specification {
           |          "id": "VBgeDDYAADMAz2Rw",
           |          "type": "documentation-categoy",
           |          "tags": ["doc-developers"],
-          |          "slug": "developers-manual"
+          |          "slug": "developers-manual",
+          |          "lang": "en-en"
           |        },
           |        "isBroken": false
           |      }
@@ -368,19 +297,6 @@ class FragmentSpec extends Specification {
           |}]
         """.stripMargin)
       json.convertTo[StructuredText].asHtml(resolver) mustEqual "<p><em>This section describes the REST API to access Prismic.io. It is useful to get an in-depth knowledge on how Prismic.io works, but most of the time you will be using a development kit; for that reason it is recommended to get familiar with the </em><a href=\"http://localhost/documentation-categoy/VBgeDDYAADMAz2Rw\"><em>developer's manual</em></a><em> before proceeding on this section.</em></p>"
-    }
-  }
-
-  "Image" should {
-    val api = await(Api.get("https://test-public.prismic.io/api"))
-    def query(q: String) = await(api.forms("everything").ref(api.master).query(q).submit())
-    val doc = query("""[[:d = at(document.id, "Uyr9sgEAAGVHNoFZ")]]""").results.head
-    val img = doc.getImage("article.illustration", "icon")
-    val url = "https://prismic-io.s3.amazonaws.com/test-public/9f5f4e8a5d95c7259108e9cfdde953b5e60dcbb6.jpg"
-    "find first" in {
-      img must beSome.like {
-        case v: Fragment.Image.View => v.asHtml must_== s"""<img alt="some alt text" src="$url" width="100" height="100" />"""
-      }
     }
   }
 
@@ -412,4 +328,100 @@ class FragmentSpec extends Specification {
 				"<p class=\"block-img\"><a href=\"http://sentione.com\"><img alt=\"\" src=\"http://cdn.sentione.com/season-logo/logo.png\" width=\"180\" height=\"82\" /></a></p>"
 		}
 	}
+
+  "WebLink" should {
+
+    "deserialize to weblink without target" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "url": "https://google.fr"
+        |}
+			""".stripMargin)
+
+			json.convertTo[WebLink].asHtml() mustEqual """<a href="https://google.fr">https://google.fr</a>"""
+		}
+
+    "deserialize to weblink with target blank" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "url": "https://google.fr",
+        |  "target": "_blank"
+        |}
+			""".stripMargin)
+
+			json.convertTo[WebLink].asHtml() mustEqual """<a href="https://google.fr" target="_blank" rel="noopener">https://google.fr</a>"""
+		}
+  }
+
+  "FileLink" should {
+    "deserialize to fileLink without target" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "file": {
+        |    "url": "https://mondoc.com",
+        |    "kind": "media",
+        |    "size": "10",
+        |    "name": "mondoc"
+        |  }
+        |}
+			""".stripMargin)
+
+			json.convertTo[FileLink].asHtml() mustEqual """<a href="https://mondoc.com">mondoc</a>"""
+		}
+
+    "deserialize to fileLink with target" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "file": {
+        |    "url": "https://mondoc.com",
+        |    "kind": "media",
+        |    "size": "10",
+        |    "name": "mondoc",
+        |    "target": "_blank"
+        |  }
+        |}
+			""".stripMargin)
+
+			json.convertTo[FileLink].asHtml() mustEqual """<a href="https://mondoc.com" target="_blank" rel="noopener">mondoc</a>"""
+		}
+  }
+
+  "ImageLink" should {
+    "deserialize to ImageLink without target" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "image": {
+        |    "url": "https://monmedia.com",
+        |    "kind": "media",
+        |    "size": "10",
+        |    "name": "monmedia"
+        |  }
+        |}
+			""".stripMargin)
+
+			json.convertTo[ImageLink].asHtml() mustEqual """<img src="https://monmedia.com" alt="monmedia"/>"""
+		}
+
+    "deserialize to ImageLink with target" in {
+      val json = JsonParser(
+			"""
+				|{
+        |  "image": {
+        |    "url": "https://monmedia.com",
+        |    "kind": "media",
+        |    "size": "10",
+        |    "name": "monmedia",
+        |    "target": "_blank"
+        |  }
+        |}
+			""".stripMargin)
+
+			json.convertTo[ImageLink].asHtml() mustEqual """<a href="https://monmedia.com" target="_blank" rel="noopener"><img src="https://monmedia.com" alt="monmedia"/></a>"""
+		}
+  }
 }

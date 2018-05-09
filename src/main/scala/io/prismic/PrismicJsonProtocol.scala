@@ -15,27 +15,32 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
   // Fragments
 
   implicit object WeblinkFormat extends RootJsonFormat[WebLink] {
-    override def read(json: JsValue): WebLink = json.asJsObject.getFields("url") match {
-      case Seq(JsString(url)) => WebLink(url)
-      case _ => throw new DeserializationException("Expected url field")
-    }
+    override def read(json: JsValue): WebLink = WebLink(
+      (json \ "url").convertTo[String],
+      (json \ "target").toOpt[String]
+    )
     override def write(obj: WebLink): JsValue = throw new SerializationException("Not implemented")
   }
 
   implicit object FileLinkFormat extends RootJsonFormat[FileLink] {
-    override def read(json: JsValue): FileLink = (json \ "file").asJsObject.getFields("url", "kind", "size", "name") match {
-      case Seq(JsString(url), JsString(kind), JsString(size), JsString(name)) => FileLink(url, kind, size.toLong, name)
-      case _ => throw new DeserializationException("Missing field")
-    }
-
+    override def read(json: JsValue): FileLink = FileLink(
+      (json \ "file" \ "url").convertTo[String],
+      (json \ "file" \ "kind").convertTo[String],
+      (json \ "file" \ "size").convertTo[String].toLong,
+      (json \ "file" \ "name").convertTo[String],
+      (json \ "file" \ "target").toOpt[String]
+    )
     override def write(obj: FileLink): JsValue = throw new SerializationException("Not implemented")
   }
 
   implicit object ImageLinkFormat extends RootJsonFormat[ImageLink] {
-    override def read(json: JsValue): ImageLink = (json \ "image").asJsObject.getFields("url", "kind", "size", "name") match {
-      case Seq(JsString(url), JsString(kind), JsString(size), JsString(name)) => ImageLink(url, kind, size.toLong, name)
-      case _ => throw new DeserializationException("Missing field")
-    }
+    override def read(json: JsValue): ImageLink = ImageLink(
+      (json \ "image" \ "url").convertTo[String],
+      (json \ "image" \ "kind").convertTo[String],
+      (json \ "image" \ "size").convertTo[String].toLong,
+      (json \ "image" \ "name").convertTo[String],
+      (json \ "image" \ "target").toOpt[String]
+    )
 
     override def write(obj: ImageLink): JsValue = throw new SerializationException("Not implemented")
   }
@@ -54,8 +59,10 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
         typ,
         (json \ "document" \ "tags").toOpt[Seq[String]].getOrElse(Nil),
         (json \ "document" \ "slug").convertTo[String],
+        (json \ "document" \ "lang").convertTo[String],
         fragments,
-        (json \ "isBroken").toOpt[Boolean].getOrElse(false)
+        (json \ "isBroken").toOpt[Boolean].getOrElse(false),
+        (json \ "target").toOpt[String]
       )
     }
     override def write(obj: DocumentLink): JsValue = throw new SerializationException("Not implemented")
@@ -70,6 +77,17 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
       case t => throw new DeserializationException(s"Unkown link type $t")
     }
     override def write(obj: Link): JsValue = throw new SerializationException("Not implemented")
+  }
+
+  implicit object AlternateLanguageFormat extends RootJsonFormat[AlternateLanguage] {
+    override def read(json: JsValue): AlternateLanguage = AlternateLanguage(
+      (json \ "id").convertTo[String],
+      (json \ "uid").toOpt[String],
+      (json \ "type").convertTo[String],
+      (json \ "lang").convertTo[String]
+    )
+
+    override def write(obj: AlternateLanguage): JsValue = throw new SerializationException("Not implemented")
   }
 
   implicit object DateFormat extends RootJsonFormat[Date] {
@@ -254,8 +272,8 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
         case Seq(JsString("Link.file"), value) => value.convertTo[FileLink]
         case Seq(JsString("Link.image"), value) => value.convertTo[ImageLink]
         case Seq(JsString("StructuredText"), value) => value.convertTo[StructuredText]
-        case Seq(JsString("Group"), value) => value.convertTo[Group]
-        case Seq(JsString("SliceZone"), value) => value.convertTo[SliceZone]
+        case Seq(JsString("Group"), value) => value.convertTo[Group](GroupFormat)
+        case Seq(JsString("SliceZone"), value) => value.convertTo[SliceZone](SliceZoneFormat)
         case Seq(JsString("Color"), value) => value.convertTo[Color]
         case Seq(JsString("Separator")) => Separator
         case Seq(JsString(t), _) => throw new DeserializationException(s"Unkown fragment type: $t")
@@ -275,11 +293,18 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
   implicit object SliceFormat extends RootJsonFormat[Slice] {
     override def read(jsValue: JsValue): Slice = {
       val json = jsValue.asJsObject
-      json.getFields("slice_type", "value") match {
+      json.getFields("slice_type", "value", "non-repeat", "repeat") match {
         case Seq(JsString(sliceType), data: JsObject) =>
           val sliceLabel = (json \ "slice_label").toOpt[String]
           val fragment = data.convertTo[Fragment]
-          Slice(sliceType, sliceLabel, fragment)
+          SimpleSlice(sliceType, sliceLabel, fragment)
+
+        case Seq(JsString(sliceType), nonRepeat: JsObject, repeat: JsArray) =>
+          val sliceLabel = (json \ "slice_label").toOpt[String]
+          val nr = JsArray(nonRepeat).convertTo[Group].docs.headOption.getOrElse(Group.Doc(Map()))
+          val r = repeat.convertTo[Group]
+          CompositeSlice(sliceType, sliceLabel, nr, r)
+
         case _ => throw new DeserializationException("Expected slice_type and value")
       }
     }
@@ -302,14 +327,17 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
 
     override def read(jsValue: JsValue): Document = {
       val json = jsValue.asJsObject
-      json.getFields("id", "href", "type", "data") match {
-        case Seq(JsString(id), JsString(href), JsString(typ), data: JsObject) =>
+      json.getFields("id", "href", "type", "lang", "data") match {
+        case Seq(JsString(id), JsString(href), JsString(typ), JsString(lang), data: JsObject) =>
           val uid: Option[String] = (json \ "uid").toOpt[String]
           val tags: Seq[String] = (json \ "tags").toOpt[Seq[String]].getOrElse(Nil)
           val slugs: Seq[String] = (json \ "slugs").toOpt[Seq[String]].map(decode).getOrElse(Nil)
+          val firstPublicationDate: Option[DateTime] = (json \ "first_publication_date").toOpt[String].map(new DateTime(_).withZone(DateTimeZone.UTC))
+          val lastPublicationDate: Option[DateTime] = (json \ "last_publication_date").toOpt[String].map(new DateTime(_).withZone(DateTimeZone.UTC))
+          val alternateLanguages: Seq[AlternateLanguage] = (json \ "alternate_languages").toOpt[Seq[AlternateLanguage]].getOrElse(Nil)
           val fragments: JsObject = (data \ typ).asJsObject
-          Document(id, uid, typ, href, tags, slugs, parseFragments(fragments, typ))
-        case _ => throw new DeserializationException("Expected id, href, type and data")
+          Document(id, uid, typ, href, tags, slugs, firstPublicationDate, lastPublicationDate, lang, alternateLanguages, parseFragments(fragments, typ))
+        case _ => throw new DeserializationException("Expected id, href, type lang and data")
       }
     }
 
@@ -318,10 +346,18 @@ object PrismicJsonProtocol extends DefaultJsonProtocol with NullOptions {
     def parseFragments(json: JsObject, typ: String): Map[String, Fragment] = {
       val fields = json.fields.map {
         case (key, jsobj: JsObject) => jsobj.toOpt[Fragment].toList.map(fragment => (s"$typ.$key", fragment))
-        case (key, jsons: JsArray) => jsons.elements.zipWithIndex.collect {
-          case (json: JsObject, i) => json.toOpt[Fragment].toList.map(fragment => (s"$typ.$key[$i]", fragment))
-          case (jsval, i) => Nil
-        }.flatten
+        case (key, jsons: JsArray) =>
+          jsons.toOpt[StructuredText] match {
+            case Some(structuredText) =>
+              Seq(s"$typ.$key" -> structuredText)
+
+            case None =>
+              jsons.elements.zipWithIndex.collect {
+                case (json: JsObject, i) => json.toOpt[Fragment].toList.map(fragment => (s"$typ.$key[$i]", fragment))
+                case (jsval, i) => Nil
+              }.flatten
+          }
+
         case (key, jsval) => Nil
       }.flatten.toSeq
       collection.immutable.ListMap(fields:_*)
